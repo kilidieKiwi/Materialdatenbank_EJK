@@ -75,8 +75,8 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   <div class="wrap">
     <nav><strong>Lagerbuch</strong><a href="#datenbank">Zur Datenbank</a></nav>
     <section class="hero">
-      <h1>Wo liegt eigentlich was?</h1>
-      <p>Gemeinsam Gegenstände mit Lagerort und Menge pflegen. Jede Änderung sehen alle sofort.</p>
+      <h1>Materialliste</h1>
+      <p>Gemeinschaftliche Materialliste</p>
       <div class="tags" aria-live="polite">
         <div class="tag"><b id="sItems">0</b><span>Gegenstände</span></div>
         <div class="tag"><b id="sQty">0</b><span>Stück insgesamt</span></div>
@@ -112,7 +112,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
     </div>
 
     <div class="tools">
-      <input type="search" id="search" placeholder="Suchen nach Gegenstand oder Ort" aria-label="Suchen">
+      <input type="search" id="search" placeholder="Suchen nach Gegenstand, Lagerort oder Menge" aria-label="Suchen">
       <div class="btns">
         <button id="exportBtn" type="button">Exportieren</button>
         <button id="importBtn" type="button">Importieren</button>
@@ -133,8 +133,10 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
 
 <script>
 (function(){
+  // ====== HIER DEINE SUPABASE-DATEN EINTRAGEN ======
   var SUPABASE_URL = "https://znpffgjcqdgufiapkoym.supabase.co";
   var SUPABASE_KEY = "sb_publishable_VyCHrJQScEc1OXDJGE1I_g_lKLFj1HK";
+  // =================================================
 
   var $ = function(id){ return document.getElementById(id); };
   var form=$("form"), fName=$("fName"), fLoc=$("fLoc"), fQty=$("fQty"), fNote=$("fNote");
@@ -160,7 +162,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   function render(){
     var q = $("search").value.trim().toLowerCase();
     var list = items.filter(function(i){
-      return !q || i.name.toLowerCase().indexOf(q) > -1 || i.loc.toLowerCase().indexOf(q) > -1 || (i.note || "").toLowerCase().indexOf(q) > -1;
+      return !q || i.name.toLowerCase().indexOf(q) > -1 || i.loc.toLowerCase().indexOf(q) > -1 || String(i.qty) === q;
     }).sort(function(a,b){ return a.name.localeCompare(b.name,"de"); });
 
     $("rows").innerHTML = list.length ? list.map(function(i){
@@ -189,7 +191,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   form.addEventListener("submit", function(e){
     e.preventDefault();
     var name = fName.value.trim(), loc = fLoc.value.trim(), qty = parseInt(fQty.value, 10), note = fNote.value.trim() || null;
-    if(!name || !loc || isNaN(qty) || qty < 0){ say("Bitte Gegenstand, Lagerort und eine Menge ab 0 angeben."); return; }
+    if(!name || !loc || isNaN(qty) || qty < 0){ say("Suche"); return; }
     var wasEdit = !!editId;
     var req = wasEdit ? db.from("items").update({name:name, loc:loc, qty:qty, note:note}).eq("id", editId)
                       : db.from("items").insert({name:name, loc:loc, qty:qty, note:note});
