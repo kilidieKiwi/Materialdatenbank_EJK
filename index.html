@@ -40,7 +40,9 @@ h2{font-size:1.8rem;margin:0 0 6px}
 .lead{margin:0 0 24px;color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
 .notice{border-left:6px solid var(--danger);margin-bottom:24px}
-form.add{display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:12px;align-items:end}
+form.add{display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;align-items:end}
+.note-field{grid-column:1 / 3}
+td.note{color:var(--muted);max-width:280px}
 label{display:grid;gap:6px;font-weight:600;font-size:.9rem}
 input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%}
 button{font:inherit;font-weight:600;padding:10px 16px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
@@ -63,7 +65,7 @@ td.act{text-align:right;white-space:nowrap}
 .live{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--muted);margin-right:8px}
 .live.on{background:var(--accent)}
 footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-size:.9rem}
-@media (max-width:760px){form.add{grid-template-columns:1fr}.hero{padding:36px 0 48px}}
+@media (max-width:760px){form.add{grid-template-columns:1fr}.note-field{grid-column:auto}.hero{padding:36px 0 48px}}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -99,6 +101,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
         <label>Gegenstand<input id="fName" required maxlength="80" placeholder="z. B. Akkuschrauber"></label>
         <label>Lagerort<input id="fLoc" required maxlength="80" list="locList" placeholder="z. B. Keller, Regal 2"></label>
         <label>Menge<input id="fQty" type="number" min="0" step="1" value="1" required></label>
+        <label class="note-field">Notiz (optional)<input id="fNote" maxlength="200" placeholder="z. B. Akku fast leer"></label>
         <div style="display:flex;gap:8px">
           <button class="primary" id="saveBtn" type="submit">Hinzufügen</button>
           <button id="cancelBtn" type="button" hidden>Abbrechen</button>
@@ -119,7 +122,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
 
     <div class="card scroll">
       <table>
-        <thead><tr><th>Gegenstand</th><th>Lagerort</th><th class="num">Menge</th><th></th></tr></thead>
+        <thead><tr><th>Gegenstand</th><th>Lagerort</th><th class="num">Menge</th><th>Notiz</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -130,11 +133,11 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
 
 <script>
 (function(){
-  var SUPABASE_URL = "https://znpffgjcqdgufiapkoym.supabase.co";
+  var SUPABASE_URL = "https://znpffgjcqdgufiapkoym.supabase.co/rest/v1/";
   var SUPABASE_KEY = "sb_publishable_VyCHrJQScEc1OXDJGE1I_g_lKLFj1HK";
 
   var $ = function(id){ return document.getElementById(id); };
-  var form=$("form"), fName=$("fName"), fLoc=$("fLoc"), fQty=$("fQty");
+  var form=$("form"), fName=$("fName"), fLoc=$("fLoc"), fQty=$("fQty"), fNote=$("fNote");
   var items = [], editId = null, db = null;
 
   function say(t){ $("msg").textContent = t; }
@@ -157,15 +160,16 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   function render(){
     var q = $("search").value.trim().toLowerCase();
     var list = items.filter(function(i){
-      return !q || i.name.toLowerCase().indexOf(q) > -1 || i.loc.toLowerCase().indexOf(q) > -1;
+      return !q || i.name.toLowerCase().indexOf(q) > -1 || i.loc.toLowerCase().indexOf(q) > -1 || (i.note || "").toLowerCase().indexOf(q) > -1;
     }).sort(function(a,b){ return a.name.localeCompare(b.name,"de"); });
 
     $("rows").innerHTML = list.length ? list.map(function(i){
       return '<tr><td>'+esc(i.name)+'</td><td><span class="loc">'+esc(i.loc)+'</span></td>'
         +'<td class="num'+(i.qty===0?' low':'')+'">'+i.qty+'</td>'
+        +'<td class="note">'+esc(i.note || "")+'</td>'
         +'<td class="act"><button data-edit="'+i.id+'">Ändern</button> '
         +'<button class="danger" data-del="'+i.id+'">Löschen</button></td></tr>';
-    }).join("") : '<tr><td colspan="4" class="empty">'
+    }).join("") : '<tr><td colspan="5" class="empty">'
         + (items.length ? 'Nichts gefunden. Probiere einen anderen Suchbegriff.' : 'Noch nichts eingetragen. Füge oben den ersten Gegenstand hinzu.')
         + '</td></tr>';
 
@@ -184,11 +188,11 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
 
   form.addEventListener("submit", function(e){
     e.preventDefault();
-    var name = fName.value.trim(), loc = fLoc.value.trim(), qty = parseInt(fQty.value, 10);
+    var name = fName.value.trim(), loc = fLoc.value.trim(), qty = parseInt(fQty.value, 10), note = fNote.value.trim() || null;
     if(!name || !loc || isNaN(qty) || qty < 0){ say("Bitte Gegenstand, Lagerort und eine Menge ab 0 angeben."); return; }
     var wasEdit = !!editId;
-    var req = wasEdit ? db.from("items").update({name:name, loc:loc, qty:qty}).eq("id", editId)
-                      : db.from("items").insert({name:name, loc:loc, qty:qty});
+    var req = wasEdit ? db.from("items").update({name:name, loc:loc, qty:qty, note:note}).eq("id", editId)
+                      : db.from("items").insert({name:name, loc:loc, qty:qty, note:note});
     req.then(function(r){
       if(r.error){ say("Speichern fehlgeschlagen: " + r.error.message); return; }
       say("„" + name + "“ wurde " + (wasEdit ? "geändert." : "hinzugefügt."));
@@ -203,7 +207,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
     var b = e.target.closest("button"); if(!b) return;
     if(b.dataset.edit){
       var it = items.filter(function(i){ return String(i.id) === b.dataset.edit; })[0]; if(!it) return;
-      editId = it.id; fName.value = it.name; fLoc.value = it.loc; fQty.value = it.qty;
+      editId = it.id; fName.value = it.name; fLoc.value = it.loc; fQty.value = it.qty; fNote.value = it.note || "";
       $("saveBtn").textContent = "Änderung speichern"; $("cancelBtn").hidden = false;
       $("formTitle").textContent = "Gegenstand ändern";
       form.scrollIntoView({behavior:"smooth", block:"center"}); fName.focus();
@@ -220,7 +224,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   });
 
   $("exportBtn").addEventListener("click", function(){
-    var out = items.map(function(i){ return {name:i.name, loc:i.loc, qty:i.qty}; });
+    var out = items.map(function(i){ return {name:i.name, loc:i.loc, qty:i.qty, note:i.note || null}; });
     var blob = new Blob([JSON.stringify(out, null, 2)], {type:"application/json"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "lagerbuch.json"; a.click();
@@ -234,7 +238,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
       try {
         var d = JSON.parse(r.result); if(!Array.isArray(d)) throw 0;
         var rows = d.filter(function(i){ return i && i.name && i.loc; }).map(function(i){
-          return {name:String(i.name), loc:String(i.loc), qty:Math.max(0, parseInt(i.qty,10) || 0)};
+          return {name:String(i.name), loc:String(i.loc), qty:Math.max(0, parseInt(i.qty,10) || 0), note:i.note ? String(i.note) : null};
         });
         db.from("items").insert(rows).then(function(res){
           if(res.error){ say("Import fehlgeschlagen: " + res.error.message); return; }
