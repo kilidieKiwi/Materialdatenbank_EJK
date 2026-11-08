@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+var SUPABASE_URL = https://znpffgjcqdgufiapkoym.supabase.co/rest/v1/;
+var SUPABASE_KEY = sb_publishable_VyCHrJQScEc1OXDJGE1I_g_lKLFj1HK;
 <html lang="de">
 <head>
 <meta charset="utf-8">
@@ -7,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 :root{
   --bg:#eef2f4; --surface:#ffffff; --ink:#14232b; --muted:#5a6b74; --line:#d3dde2;
@@ -20,14 +23,11 @@
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
-a{color:inherit}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
-
-/* Kopf + Hero */
 header.top{background:var(--hero);color:var(--hero-ink)}
 nav{display:flex;justify-content:space-between;align-items:center;padding:18px 0}
-nav strong{font-size:1.1rem;letter-spacing:.01em}
+nav strong{font-size:1.1rem}
 nav a{text-decoration:none;font-weight:600;padding:8px 14px;border-radius:999px;background:var(--label);color:var(--label-ink)}
 .hero{padding:56px 0 72px}
 .hero h1{font-size:clamp(2.6rem,7vw,5rem);line-height:1;margin:0 0 18px;font-weight:800;letter-spacing:-.02em;max-width:14ch}
@@ -37,12 +37,11 @@ nav a{text-decoration:none;font-weight:600;padding:8px 14px;border-radius:999px;
   border-left:8px solid color-mix(in srgb,var(--label-ink) 35%,var(--label));min-width:140px}
 .tag b{display:block;font-size:2rem;line-height:1.1;font-weight:800}
 .tag span{font-size:.9rem}
-
-/* Datenbank */
 main{padding:48px 0 72px}
 h2{font-size:1.8rem;margin:0 0 6px}
 .lead{margin:0 0 24px;color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
+.notice{border-left:6px solid var(--danger);margin-bottom:24px}
 form.add{display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:12px;align-items:end}
 label{display:grid;gap:6px;font-weight:600;font-size:.9rem}
 input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%}
@@ -63,6 +62,8 @@ td.act{text-align:right;white-space:nowrap}
 .low{color:var(--danger);font-weight:800}
 .empty{padding:36px 10px;text-align:center;color:var(--muted)}
 #msg{min-height:1.4em;margin:10px 0 0;color:var(--muted);font-size:.9rem}
+.live{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--muted);margin-right:8px}
+.live.on{background:var(--accent)}
 footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-size:.9rem}
 @media (max-width:760px){form.add{grid-template-columns:1fr}.hero{padding:36px 0 48px}}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
@@ -75,7 +76,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
     <nav><strong>Lagerbuch</strong><a href="#datenbank">Zur Datenbank</a></nav>
     <section class="hero">
       <h1>Wo liegt eigentlich was?</h1>
-      <p>Trag Gegenstände mit Lagerort und Menge ein, such sie in Sekunden und halte den Bestand aktuell.</p>
+      <p>Gemeinsam Gegenstände mit Lagerort und Menge pflegen. Jede Änderung sehen alle sofort.</p>
       <div class="tags" aria-live="polite">
         <div class="tag"><b id="sItems">0</b><span>Gegenstände</span></div>
         <div class="tag"><b id="sQty">0</b><span>Stück insgesamt</span></div>
@@ -87,8 +88,13 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
 
 <main id="datenbank">
   <div class="wrap">
+    <div class="card notice" id="setup" hidden>
+      <strong>Datenbank noch nicht verbunden.</strong><br>
+      Trage oben im Skript dieser Datei bei <code>SUPABASE_URL</code> und <code>SUPABASE_KEY</code> deine Projektdaten ein.
+    </div>
+
     <h2 id="formTitle">Gegenstand hinzufügen</h2>
-    <p class="lead">Die Daten bleiben in deinem Browser gespeichert. Mit „Exportieren“ sicherst du sie als Datei.</p>
+    <p class="lead"><span class="live" id="live"></span><span id="liveText">Verbinde …</span></p>
 
     <div class="card">
       <form class="add" id="form" autocomplete="off">
@@ -122,29 +128,35 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   </div>
 </main>
 
-<footer><div class="wrap">Lagerbuch – läuft komplett im Browser, ohne Server.</div></footer>
+<footer><div class="wrap">Lagerbuch – gemeinsame Datenbank für alle, die diese Seite kennen.</div></footer>
 
 <script>
 (function(){
-  var KEY = "lagerbuch-v1";
-  var items = load();
-  var editId = null;
+  // ====== HIER DEINE SUPABASE-DATEN EINTRAGEN ======
+  var SUPABASE_URL = "DEINE_PROJEKT_URL";
+  var SUPABASE_KEY = "DEIN_ANON_KEY";
+  // =================================================
 
   var $ = function(id){ return document.getElementById(id); };
   var form=$("form"), fName=$("fName"), fLoc=$("fLoc"), fQty=$("fQty");
+  var items = [], editId = null, db = null;
 
-  function load(){
-    try { var d = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(d) ? d : []; }
-    catch(e){ return []; }
-  }
-  function save(){
-    try { localStorage.setItem(KEY, JSON.stringify(items)); }
-    catch(e){ say("Speichern im Browser nicht möglich. Bitte exportiere deine Daten."); }
-  }
   function say(t){ $("msg").textContent = t; }
-  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function status(on, text){ $("live").className = "live" + (on ? " on" : ""); $("liveText").textContent = text; }
+
+  if(/DEINE_/.test(SUPABASE_URL + SUPABASE_KEY) || !window.supabase){
+    $("setup").hidden = false; status(false, "Nicht verbunden"); render(); return;
+  }
+  db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  function refresh(){
+    return db.from("items").select("*").order("name").then(function(r){
+      if(r.error){ status(false, "Fehler beim Laden"); say("Laden fehlgeschlagen: " + r.error.message); return; }
+      items = r.data || []; render();
+    });
+  }
 
   function render(){
     var q = $("search").value.trim().toLowerCase();
@@ -158,7 +170,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
         +'<td class="act"><button data-edit="'+i.id+'">Ändern</button> '
         +'<button class="danger" data-del="'+i.id+'">Löschen</button></td></tr>';
     }).join("") : '<tr><td colspan="4" class="empty">'
-        + (items.length ? 'Nichts gefunden. Probiere einen anderen Suchbegriff.' : 'Noch nichts eingetragen. Füge oben deinen ersten Gegenstand hinzu.')
+        + (items.length ? 'Nichts gefunden. Probiere einen anderen Suchbegriff.' : 'Noch nichts eingetragen. Füge oben den ersten Gegenstand hinzu.')
         + '</td></tr>';
 
     var locs = {}; items.forEach(function(i){ locs[i.loc.toLowerCase()] = i.loc; });
@@ -178,14 +190,14 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
     e.preventDefault();
     var name = fName.value.trim(), loc = fLoc.value.trim(), qty = parseInt(fQty.value, 10);
     if(!name || !loc || isNaN(qty) || qty < 0){ say("Bitte Gegenstand, Lagerort und eine Menge ab 0 angeben."); return; }
-    if(editId){
-      items = items.map(function(i){ return i.id === editId ? {id:i.id, name:name, loc:loc, qty:qty} : i; });
-      say("„" + name + "“ wurde geändert.");
-    } else {
-      items.push({id:uid(), name:name, loc:loc, qty:qty});
-      say("„" + name + "“ wurde hinzugefügt.");
-    }
-    save(); resetForm(); render(); fName.focus();
+    var wasEdit = !!editId;
+    var req = wasEdit ? db.from("items").update({name:name, loc:loc, qty:qty}).eq("id", editId)
+                      : db.from("items").insert({name:name, loc:loc, qty:qty});
+    req.then(function(r){
+      if(r.error){ say("Speichern fehlgeschlagen: " + r.error.message); return; }
+      say("„" + name + "“ wurde " + (wasEdit ? "geändert." : "hinzugefügt."));
+      resetForm(); refresh(); fName.focus();
+    });
   });
 
   $("cancelBtn").addEventListener("click", function(){ resetForm(); say(""); });
@@ -194,23 +206,26 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   $("rows").addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b) return;
     if(b.dataset.edit){
-      var it = items.filter(function(i){ return i.id === b.dataset.edit; })[0]; if(!it) return;
+      var it = items.filter(function(i){ return String(i.id) === b.dataset.edit; })[0]; if(!it) return;
       editId = it.id; fName.value = it.name; fLoc.value = it.loc; fQty.value = it.qty;
       $("saveBtn").textContent = "Änderung speichern"; $("cancelBtn").hidden = false;
       $("formTitle").textContent = "Gegenstand ändern";
       form.scrollIntoView({behavior:"smooth", block:"center"}); fName.focus();
     } else if(b.dataset.del){
-      var d = items.filter(function(i){ return i.id === b.dataset.del; })[0]; if(!d) return;
+      var d = items.filter(function(i){ return String(i.id) === b.dataset.del; })[0]; if(!d) return;
       if(confirm("„" + d.name + "“ wirklich löschen?")){
-        items = items.filter(function(i){ return i.id !== d.id; });
-        if(editId === d.id) resetForm();
-        save(); render(); say("„" + d.name + "“ wurde gelöscht.");
+        db.from("items").delete().eq("id", d.id).then(function(r){
+          if(r.error){ say("Löschen fehlgeschlagen: " + r.error.message); return; }
+          if(editId === d.id) resetForm();
+          say("„" + d.name + "“ wurde gelöscht."); refresh();
+        });
       }
     }
   });
 
   $("exportBtn").addEventListener("click", function(){
-    var blob = new Blob([JSON.stringify(items, null, 2)], {type:"application/json"});
+    var out = items.map(function(i){ return {name:i.name, loc:i.loc, qty:i.qty}; });
+    var blob = new Blob([JSON.stringify(out, null, 2)], {type:"application/json"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "lagerbuch.json"; a.click();
     URL.revokeObjectURL(a.href);
@@ -221,19 +236,29 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
     var r = new FileReader();
     r.onload = function(){
       try {
-        var d = JSON.parse(r.result);
-        if(!Array.isArray(d)) throw 0;
-        items = d.filter(function(i){ return i && i.name && i.loc; }).map(function(i){
-          return {id:uid(), name:String(i.name), loc:String(i.loc), qty:Math.max(0, parseInt(i.qty,10) || 0)};
+        var d = JSON.parse(r.result); if(!Array.isArray(d)) throw 0;
+        var rows = d.filter(function(i){ return i && i.name && i.loc; }).map(function(i){
+          return {name:String(i.name), loc:String(i.loc), qty:Math.max(0, parseInt(i.qty,10) || 0)};
         });
-        save(); render(); say(items.length + " Einträge importiert.");
+        db.from("items").insert(rows).then(function(res){
+          if(res.error){ say("Import fehlgeschlagen: " + res.error.message); return; }
+          say(rows.length + " Einträge importiert."); refresh();
+        });
       } catch(err){ say("Die Datei konnte nicht gelesen werden. Bitte eine Lagerbuch-Exportdatei wählen."); }
       e.target.value = "";
     };
     r.readAsText(f);
   });
 
-  render();
+  // Live-Updates: Änderungen anderer erscheinen automatisch
+  db.channel("items-live")
+    .on("postgres_changes", {event:"*", schema:"public", table:"items"}, refresh)
+    .subscribe(function(s){
+      if(s === "SUBSCRIBED") status(true, "Live verbunden – Änderungen erscheinen sofort");
+      else if(s === "CHANNEL_ERROR" || s === "TIMED_OUT") status(false, "Verbunden, aber ohne Live-Updates");
+    });
+
+  refresh();
 })();
 </script>
 </body>
