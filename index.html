@@ -76,6 +76,10 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 .chip.part{background:var(--label);color:var(--label-ink);border-color:var(--label)}
 .chip.miss{color:var(--danger);border-color:var(--danger)}
 .stack{margin-top:20px}
+.sugg-wrap{position:relative}
+.sugg{position:absolute;left:0;right:0;top:100%;z-index:20;margin:4px 0 0;padding:4px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:250px;overflow-y:auto;font-weight:400}
+.sugg li{padding:9px 10px;border-radius:6px;cursor:pointer}
+.sugg li:hover,.sugg li[aria-selected="true"]{background:var(--label);color:var(--label-ink)}
 #missList{margin:8px 0 16px;padding-left:20px}
 #missList li{margin:4px 0}
 @media (max-width:760px){form.add,form.pform,.trip-row{grid-template-columns:1fr}.note-field{grid-column:auto}.hero{padding:36px 0 48px}}
@@ -118,7 +122,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
     <div class="card">
       <form class="add" id="form" autocomplete="off">
         <label>Gegenstand<input id="fName" required maxlength="80" placeholder="z. B. Akkuschrauber"></label>
-        <label>Lagerort<input id="fLoc" required maxlength="80" list="locList" placeholder="z. B. Keller, Regal 2"></label>
+        <label>Lagerort<div class="sugg-wrap"><input id="fLoc" required maxlength="80" placeholder="z. B. Keller, Regal 2"></div></label>
         <label>Menge<input id="fQty" type="number" min="0" step="1" value="1" required></label>
         <label class="note-field">Notiz (optional)<input id="fNote" maxlength="200" placeholder="z. B. Akku fast leer"></label>
         <div style="display:flex;gap:8px">
@@ -126,7 +130,6 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
           <button id="cancelBtn" type="button" hidden>Abbrechen</button>
         </div>
       </form>
-      <datalist id="locList"></datalist>
       <p id="msg" role="status"></p>
     </div>
 
@@ -153,14 +156,13 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 
       <div class="card">
         <form class="pform" id="pForm" autocomplete="off">
-          <label>Gegenstand<input id="pName" required maxlength="80" list="nameList" placeholder="Tippen und Vorschlag aus dem Lager wählen"></label>
+          <label>Gegenstand<div class="sugg-wrap"><input id="pName" required maxlength="80" placeholder="Tippen und Vorschlag aus dem Lager wählen"></div></label>
           <label>Menge<input id="pQty" type="number" min="1" step="1" value="1" required></label>
           <div style="display:flex;gap:8px">
             <button class="primary" id="pSave" type="submit">Hinzufügen</button>
             <button id="pCancel" type="button" hidden>Abbrechen</button>
           </div>
         </form>
-        <datalist id="nameList"></datalist>
         <p id="pMsg" role="status"></p>
       </div>
 
@@ -185,7 +187,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 
 <script>
 (function(){
-  // ====== HIER DIE SUPABASE-DATEN EINTRAGEN ======
+  // ====== HIER DEINE SUPABASE-DATEN EINTRAGEN ======
   var SUPABASE_URL = "https://znpffgjcqdgufiapkoym.supabase.co";
   var SUPABASE_KEY = "sb_publishable_VyCHrJQScEc1OXDJGE1I_g_lKLFj1HK";
   // =================================================
@@ -200,6 +202,46 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
     $("tabLager").setAttribute("aria-pressed", v === "lager");
     $("tabPack").setAttribute("aria-pressed", v === "pack");
   }
+  var nameOpts = [], locOpts = [];
+  function attachSuggest(input, getOpts, onPick){
+    var ul = document.createElement("ul"), shown = [], active = -1;
+    ul.className = "sugg"; ul.setAttribute("role", "listbox"); ul.hidden = true;
+    input.parentNode.appendChild(ul);
+    input.setAttribute("aria-autocomplete", "list");
+    function close(){ ul.hidden = true; active = -1; }
+    function pick(v){ input.value = v; close(); if(onPick) onPick(); }
+    function paint(){
+      Array.prototype.forEach.call(ul.children, function(li, n){ li.setAttribute("aria-selected", n === active); });
+    }
+    function open(){
+      var q = input.value.trim().toLowerCase();
+      var all = getOpts().slice().sort(function(a,b){ return a.localeCompare(b, "de"); });
+      var starts = all.filter(function(o){ return o.toLowerCase().indexOf(q) === 0; });
+      var rest = all.filter(function(o){ return q && o.toLowerCase().indexOf(q) > 0; });
+      shown = starts.concat(rest).slice(0, 8);
+      if(!shown.length || (shown.length === 1 && shown[0].toLowerCase() === q)){ close(); return; }
+      ul.innerHTML = shown.map(function(o){ return '<li role="option">' + esc(o) + '</li>'; }).join("");
+      ul.hidden = false; active = -1;
+    }
+    input.addEventListener("input", open);
+    input.addEventListener("focus", open);
+    input.addEventListener("blur", function(){ setTimeout(close, 200); });
+    input.addEventListener("keydown", function(e){
+      if(ul.hidden){ if(e.key === "ArrowDown") open(); return; }
+      if(e.key === "ArrowDown"){ e.preventDefault(); active = (active + 1) % shown.length; paint(); }
+      else if(e.key === "ArrowUp"){ e.preventDefault(); active = (active - 1 + shown.length) % shown.length; paint(); }
+      else if(e.key === "Enter" && active > -1){ e.preventDefault(); pick(shown[active]); }
+      else if(e.key === "Escape"){ close(); }
+    });
+    ul.addEventListener("mousedown", function(e){
+      e.preventDefault();
+      var li = e.target.closest("li");
+      if(li) pick(shown[Array.prototype.indexOf.call(ul.children, li)]);
+    });
+  }
+  attachSuggest($("pName"), function(){ return nameOpts; }, function(){ $("pQty").focus(); $("pQty").select(); });
+  attachSuggest($("fLoc"), function(){ return locOpts; }, function(){ $("fQty").focus(); $("fQty").select(); });
+
   $("tabLager").addEventListener("click", function(){ showView("lager"); });
   $("tabPack").addEventListener("click", function(){ showView("pack"); });
 
@@ -240,7 +282,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
     $("sItems").textContent = items.length;
     $("sQty").textContent = items.reduce(function(s,i){ return s + i.qty; }, 0);
     $("sLocs").textContent = Object.keys(locs).length;
-    $("locList").innerHTML = Object.keys(locs).map(function(k){ return '<option value="'+esc(locs[k])+'">'; }).join("");
+    locOpts = Object.keys(locs).map(function(k){ return locs[k]; });
   }
 
   function resetForm(){
@@ -332,9 +374,9 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
       st.qty += i.qty;
       if(i.qty > 0 && st.locs.indexOf(i.loc) < 0) st.locs.push(i.loc);
     });
-    $("nameList").innerHTML = items.filter(function(i){
+    nameOpts = items.filter(function(i){
       var k = norm(i.name); return seen[k] ? false : (seen[k] = true);
-    }).map(function(i){ return '<option value="'+esc(i.name)+'">'; }).join("");
+    }).map(function(i){ return i.name; });
 
     var missing = [];
     $("pRows").innerHTML = pack.length ? pack.map(function(p){
