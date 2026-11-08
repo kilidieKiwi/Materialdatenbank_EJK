@@ -447,7 +447,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
     .on("postgres_changes", {event:"*", schema:"public", table:"items"}, refresh)
     .on("postgres_changes", {event:"*", schema:"public", table:"packing"}, refreshPack)
     .subscribe(function(s){
-      if(s === "SUBSCRIBED") status(true, "Live verbunden – Änderungen erscheinen sofort");
+      if(s === "SUBSCRIBED") status(true, "Live verbunden");
       else if(s === "CHANNEL_ERROR" || s === "TIMED_OUT") status(false, "Verbunden, aber ohne Live-Updates");
     });
 
