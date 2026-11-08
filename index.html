@@ -61,11 +61,24 @@ td.act{text-align:right;white-space:nowrap}
 .loc{display:inline-block;background:var(--label);color:var(--label-ink);padding:2px 10px;border-radius:3px;font-weight:600;font-size:.9rem}
 .low{color:var(--danger);font-weight:800}
 .empty{padding:36px 10px;text-align:center;color:var(--muted)}
-#msg{min-height:1.4em;margin:10px 0 0;color:var(--muted);font-size:.9rem}
+#msg,#pMsg{min-height:1.4em;margin:10px 0 0;color:var(--muted);font-size:.9rem}
 .live{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--muted);margin-right:8px}
 .live.on{background:var(--accent)}
 footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-size:.9rem}
-@media (max-width:760px){form.add{grid-template-columns:1fr}.note-field{grid-column:auto}.hero{padding:36px 0 48px}}
+.tabs{display:flex;gap:8px;margin:0 0 28px}
+.tabs button{border-radius:999px;padding:10px 22px}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.trip-row{display:grid;grid-template-columns:2fr 2fr auto auto;gap:12px;align-items:end}
+form.pform{display:grid;grid-template-columns:3fr 1fr auto;gap:12px;align-items:end}
+select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%}
+.chip{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.85rem;font-weight:600;border:1px solid var(--line)}
+.chip.ok{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip.part{background:var(--label);color:var(--label-ink);border-color:var(--label)}
+.chip.miss{color:var(--danger);border-color:var(--danger)}
+.stack{margin-top:20px}
+#missList{margin:8px 0 16px;padding-left:20px}
+#missList li{margin:4px 0}
+@media (max-width:760px){form.add,form.pform,.trip-row{grid-template-columns:1fr}.note-field{grid-column:auto}.hero{padding:36px 0 48px}}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -75,8 +88,8 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   <div class="wrap">
     <nav><strong>Lagerbuch</strong><a href="#datenbank">Zur Datenbank</a></nav>
     <section class="hero">
-      <h1>Materialliste</h1>
-      <p>Gemeinschaftliche Materialliste</p>
+      <h1>Wo liegt eigentlich was?</h1>
+      <p>Gemeinsam Gegenstände mit Lagerort und Menge pflegen. Jede Änderung sehen alle sofort.</p>
       <div class="tags" aria-live="polite">
         <div class="tag"><b id="sItems">0</b><span>Gegenstände</span></div>
         <div class="tag"><b id="sQty">0</b><span>Stück insgesamt</span></div>
@@ -93,6 +106,12 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
       Trage oben im Skript dieser Datei bei <code>SUPABASE_URL</code> und <code>SUPABASE_KEY</code> deine Projektdaten ein.
     </div>
 
+    <div class="tabs" role="group" aria-label="Ansicht">
+      <button type="button" id="tabLager" aria-pressed="true">Lager</button>
+      <button type="button" id="tabPack" aria-pressed="false">Packliste</button>
+    </div>
+
+    <section id="viewLager">
     <h2 id="formTitle">Gegenstand hinzufügen</h2>
     <p class="lead"><span class="live" id="live"></span><span id="liveText">Verbinde …</span></p>
 
@@ -126,6 +145,39 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
         <tbody id="rows"></tbody>
       </table>
     </div>
+    </section>
+
+    <section id="viewPack" hidden>
+      <h2>Packliste</h2>
+      <p class="lead">Trage ein, was du für die Reise brauchst. Den Lagerort ergänzt die Seite automatisch. Was fehlt, landet in der Besorgungsliste.</p>
+
+      <div class="card">
+        <form class="pform" id="pForm" autocomplete="off">
+          <label>Gegenstand<input id="pName" required maxlength="80" list="nameList" placeholder="Tippen und Vorschlag aus dem Lager wählen"></label>
+          <label>Menge<input id="pQty" type="number" min="1" step="1" value="1" required></label>
+          <div style="display:flex;gap:8px">
+            <button class="primary" id="pSave" type="submit">Hinzufügen</button>
+            <button id="pCancel" type="button" hidden>Abbrechen</button>
+          </div>
+        </form>
+        <datalist id="nameList"></datalist>
+        <p id="pMsg" role="status"></p>
+      </div>
+
+      <div class="card scroll stack">
+        <table>
+          <thead><tr><th>Gegenstand</th><th class="num">Menge</th><th>Lagerort</th><th></th></tr></thead>
+          <tbody id="pRows"></tbody>
+        </table>
+      </div>
+
+      <h2 style="margin-top:40px">Besorgungsliste</h2>
+      <p class="lead">Das fehlt im Lager und muss besorgt werden.</p>
+      <div class="card" id="missBox">
+        <ul id="missList"></ul>
+        <button type="button" id="copyMiss">Liste kopieren</button>
+      </div>
+    </section>
   </div>
 </main>
 
@@ -133,7 +185,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
 
 <script>
 (function(){
-  // ====== HIER DEINE SUPABASE-DATEN EINTRAGEN ======
+  // ====== HIER DIE SUPABASE-DATEN EINTRAGEN ======
   var SUPABASE_URL = "https://znpffgjcqdgufiapkoym.supabase.co";
   var SUPABASE_KEY = "sb_publishable_VyCHrJQScEc1OXDJGE1I_g_lKLFj1HK";
   // =================================================
@@ -141,6 +193,15 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   var $ = function(id){ return document.getElementById(id); };
   var form=$("form"), fName=$("fName"), fLoc=$("fLoc"), fQty=$("fQty"), fNote=$("fNote");
   var items = [], editId = null, db = null;
+  var pack = [], pEditId = null, missText = "";
+
+  function showView(v){
+    $("viewLager").hidden = v !== "lager"; $("viewPack").hidden = v !== "pack";
+    $("tabLager").setAttribute("aria-pressed", v === "lager");
+    $("tabPack").setAttribute("aria-pressed", v === "pack");
+  }
+  $("tabLager").addEventListener("click", function(){ showView("lager"); });
+  $("tabPack").addEventListener("click", function(){ showView("pack"); });
 
   function say(t){ $("msg").textContent = t; }
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){
@@ -155,7 +216,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   function refresh(){
     return db.from("items").select("*").order("name").then(function(r){
       if(r.error){ status(false, "Fehler beim Laden"); say("Laden fehlgeschlagen: " + r.error.message); return; }
-      items = r.data || []; render();
+      items = r.data || []; render(); renderPack();
     });
   }
 
@@ -191,7 +252,7 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
   form.addEventListener("submit", function(e){
     e.preventDefault();
     var name = fName.value.trim(), loc = fLoc.value.trim(), qty = parseInt(fQty.value, 10), note = fNote.value.trim() || null;
-    if(!name || !loc || isNaN(qty) || qty < 0){ say("Suche"); return; }
+    if(!name || !loc || isNaN(qty) || qty < 0){ say("Bitte Gegenstand, Lagerort und eine Menge ab 0 angeben."); return; }
     var wasEdit = !!editId;
     var req = wasEdit ? db.from("items").update({name:name, loc:loc, qty:qty, note:note}).eq("id", editId)
                       : db.from("items").insert({name:name, loc:loc, qty:qty, note:note});
@@ -252,15 +313,103 @@ footer{border-top:1px solid var(--line);padding:24px 0;color:var(--muted);font-s
     r.readAsText(f);
   });
 
+  // ===== Packliste =====
+  function pSay(t){ $("pMsg").textContent = t; }
+  function norm(s){ return String(s).trim().toLowerCase().replace(/\s+/g, " "); }
+  function inStock(name){ return items.some(function(i){ return norm(i.name) === norm(name); }); }
+
+  function refreshPack(){
+    return db.from("packing").select("*").order("name").then(function(r){
+      if(r.error){ pSay("Packliste konnte nicht geladen werden: " + r.error.message); return; }
+      pack = r.data || []; renderPack();
+    });
+  }
+
+  function renderPack(){
+    var stock = {}, seen = {};
+    items.forEach(function(i){
+      var k = norm(i.name), st = stock[k] || (stock[k] = {qty:0, locs:[]});
+      st.qty += i.qty;
+      if(i.qty > 0 && st.locs.indexOf(i.loc) < 0) st.locs.push(i.loc);
+    });
+    $("nameList").innerHTML = items.filter(function(i){
+      var k = norm(i.name); return seen[k] ? false : (seen[k] = true);
+    }).map(function(i){ return '<option value="'+esc(i.name)+'">'; }).join("");
+
+    var missing = [];
+    $("pRows").innerHTML = pack.length ? pack.map(function(p){
+      var st = stock[norm(p.name)] || {qty:0, locs:[]};
+      var lack = Math.max(0, p.qty - st.qty);
+      if(lack) missing.push({name:p.name, lack:lack, need:p.qty, have:st.qty});
+      var locs = st.locs.length ? st.locs.map(function(l){ return '<span class="loc">'+esc(l)+'</span>'; }).join(" ")
+               : '<span class="chip miss">nicht im Lager</span>';
+      return '<tr><td>'+esc(p.name)+'</td><td class="num">'+p.qty+'</td><td>'+locs+'</td>'
+        +'<td class="act"><button data-pedit="'+p.id+'">Ändern</button> '
+        +'<button class="danger" data-pdel="'+p.id+'">Löschen</button></td></tr>';
+    }).join("") : '<tr><td colspan="4" class="empty">Noch nichts auf der Packliste. Trage oben ein, was du brauchst.</td></tr>';
+
+    $("missList").innerHTML = missing.length ? missing.map(function(m){
+      return '<li><b>'+esc(m.name)+'</b>: '+m.lack+' besorgen'
+        + (m.have > 0 ? ' (nötig '+m.need+', im Lager '+m.have+')' : '') + '</li>'; }).join("")
+      : '<li>' + (pack.length ? 'Alles da, nichts zu besorgen.' : 'Noch nichts auf der Packliste.') + '</li>';
+    $("copyMiss").hidden = !missing.length;
+    missText = "Besorgungsliste:\n" + missing.map(function(m){ return m.lack + "× " + m.name; }).join("\n");
+  }
+
+  function resetP(){
+    pEditId = null; $("pForm").reset(); $("pQty").value = 1;
+    $("pSave").textContent = "Hinzufügen"; $("pCancel").hidden = true;
+  }
+
+  $("pForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var name = $("pName").value.trim(), qty = parseInt($("pQty").value, 10);
+    if(!name || isNaN(qty) || qty < 1){ pSay("Bitte Gegenstand und eine Menge ab 1 angeben."); return; }
+    var was = !!pEditId;
+    var ex = was ? null : pack.filter(function(p){ return norm(p.name) === norm(name); })[0];
+    var req = was ? db.from("packing").update({name:name, qty:qty}).eq("id", pEditId)
+            : ex ? db.from("packing").update({qty:ex.qty + qty}).eq("id", ex.id)
+            : db.from("packing").insert({trip:"Reise", name:name, qty:qty});
+    req.then(function(r){
+      if(r.error){ pSay("Speichern fehlgeschlagen: " + r.error.message); return; }
+      pSay(inStock(name) ? "„" + name + "“ wurde " + (was ? "geändert." : ex ? "aufgestockt (stand schon auf der Liste)." : "hinzugefügt.")
+                         : "„" + name + "“ ist nicht im Lager. Prüfe die Schreibweise, sonst landet es auf der Besorgungsliste.");
+      resetP(); refreshPack(); $("pName").focus();
+    });
+  });
+  $("pCancel").addEventListener("click", function(){ resetP(); pSay(""); });
+
+  $("pRows").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    var id = b.dataset.pedit || b.dataset.pdel;
+    var it = pack.filter(function(p){ return String(p.id) === id; })[0]; if(!it) return;
+    if(b.dataset.pedit){
+      pEditId = it.id; $("pName").value = it.name; $("pQty").value = it.qty;
+      $("pSave").textContent = "Änderung speichern"; $("pCancel").hidden = false; $("pName").focus();
+    } else if(confirm("„" + it.name + "“ von der Packliste löschen?")){
+      db.from("packing").delete().eq("id", it.id).then(function(r){
+        if(r.error){ pSay("Löschen fehlgeschlagen: " + r.error.message); return; }
+        if(pEditId === it.id) resetP();
+        refreshPack();
+      });
+    }
+  });
+
+  $("copyMiss").addEventListener("click", function(){
+    try { navigator.clipboard.writeText(missText).then(function(){ pSay("Liste kopiert."); }); }
+    catch(err){ pSay("Kopieren wird von diesem Browser nicht unterstützt."); }
+  });
+
   // Live-Updates: Änderungen anderer erscheinen automatisch
   db.channel("items-live")
     .on("postgres_changes", {event:"*", schema:"public", table:"items"}, refresh)
+    .on("postgres_changes", {event:"*", schema:"public", table:"packing"}, refreshPack)
     .subscribe(function(s){
       if(s === "SUBSCRIBED") status(true, "Live verbunden – Änderungen erscheinen sofort");
       else if(s === "CHANNEL_ERROR" || s === "TIMED_OUT") status(false, "Verbunden, aber ohne Live-Updates");
     });
 
-  refresh();
+  refresh(); refreshPack();
 })();
 </script>
 </body>
