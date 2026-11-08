@@ -152,7 +152,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 
     <section id="viewPack" hidden>
       <h2>Packliste</h2>
-      <p class="lead">Trage ein, was du für die Reise brauchst. Den Lagerort ergänzt die Seite automatisch. Was fehlt, landet in der Besorgungsliste.</p>
+      <p class="lead">Trage ein, welche materialien benötigt werden, sind Gegenstände nicht vorhanden, landen diese auf der Besorgungsliste</p>
 
       <div class="card">
         <form class="pform" id="pForm" autocomplete="off">
@@ -174,7 +174,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
       </div>
 
       <h2 style="margin-top:40px">Besorgungsliste</h2>
-      <p class="lead">Das fehlt im Lager und muss besorgt werden.</p>
+      <p class="lead">Das fehlt und muss besorgt werden.</p>
       <div class="card" id="missBox">
         <ul id="missList"></ul>
         <button type="button" id="copyMiss">Liste kopieren</button>
@@ -183,7 +183,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
   </div>
 </main>
 
-<footer><div class="wrap">Lagerbuch – gemeinsame Datenbank für alle, die diese Seite kennen.</div></footer>
+<footer><div class="wrap">Materialbank der EJK</div></footer>
 
 <script>
 (function(){
@@ -388,7 +388,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
       return '<tr><td>'+esc(p.name)+'</td><td class="num">'+p.qty+'</td><td>'+locs+'</td>'
         +'<td class="act"><button data-pedit="'+p.id+'">Ändern</button> '
         +'<button class="danger" data-pdel="'+p.id+'">Löschen</button></td></tr>';
-    }).join("") : '<tr><td colspan="4" class="empty">Noch nichts auf der Packliste. Trage oben ein, was du brauchst.</td></tr>';
+    }).join("") : '<tr><td colspan="4" class="empty">Noch nichts auf der Packliste. Trage oben ein, was gebraucht wird.</td></tr>';
 
     $("missList").innerHTML = missing.length ? missing.map(function(m){
       return '<li><b>'+esc(m.name)+'</b>: '+m.lack+' besorgen'
